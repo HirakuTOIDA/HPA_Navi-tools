@@ -1,82 +1,186 @@
 # -*- coding: utf-8 -*-
-import sys
-import os.path
+"""
+Data conversion script for HPA_Navi.
 
+
+"""
+import os
+import threading
+import tkinter as tk
+import tkinter.filedialog
 import SylphideProcessor
 
-if __name__ == "__main__":
-    # ログファイルの読み込み
-    argvs = sys.argv
-    argc = len(argvs)
 
-    if argc != 2:
-        print ("Usage: # python {0} filename'".format(argvs[0]))
-        quit()
+class Application(tk.Frame):
+    """
+    GUI for data proceccing.
 
-    filename = argvs[1]
-    name, ext = os.path.splitext(filename)
-    fobj = open(filename, 'rb')
+    Attributes
+    ----------
+    @todo
 
-    page = SylphideProcessor.page()
-    pagea = SylphideProcessor.pagea()
-    pagef = SylphideProcessor.pagef()
-    pageh = SylphideProcessor.pageh()
-    pageg = SylphideProcessor.pageg()
-    pagem = SylphideProcessor.pagem()
-    pagen = SylphideProcessor.pagen()
-    pageo = SylphideProcessor.pageo()
-    pagep = SylphideProcessor.pagep()
-    pages = SylphideProcessor.pages()
+    """
 
-    try:
-        while True:
-            h_data = fobj.read(page.size)
-            if len(h_data) < page.size:
-                break
-            if h_data[0] == ord('A'):
-                pagea.append(h_data)
-            elif h_data[0] == ord('F'):
-                pagef.append(h_data)
-            elif h_data[0] == ord('G'):
-                pageg.append(h_data)
-            elif h_data[0] == ord('H'):
-                pageh.append(h_data)
-            elif h_data[0] == ord('M'):
-                pagem.append(h_data)
-            elif h_data[0] == ord('N'):
-                pagen.append(h_data)
-            elif h_data[0] == ord('O'):
-                pageo.append(h_data)
-            elif h_data[0] == ord('P'):
-                pagep.append(h_data)
-            elif h_data[0] == ord('S'):
-                pages.append(h_data)
-    finally:
-        fobj.close()
-    pagea.raw2phys()
-    pagea.save_raw_csv(name + "_A.csv")
+    def __init__(self, master=None):
+        super().__init__(master)
+        self.master = master
+        self.pack()
+        self.master.title('HPA_Navi Convertor')
 
-    pagef.save_raw_csv(name + "_F.csv")
+        _pad = [5, 5]
 
-    pageg.save_raw_ubx(name + "_G.ubx")
+        self.bt = tk.Button(self, text=u'Open & Convert',
+                            command=self.fileopen)
+        self.bt.pack(fill=tk.BOTH, padx=_pad[0], pady=_pad[1])
 
-    pageh.raw2phys()
-    pageh.save_raw_csv(name + "_H.csv")
+        self.filename_str = tk.StringVar()
+        self.filename_str.set(u"File name: ")
+        self.lbfn = tk.Label(self, textvariable=self.filename_str)
+        self.lbfn.pack(anchor=tk.W, padx=_pad[0], pady=_pad[1])
 
-    pagem.raw2phys()
-    pagem.save_raw_csv(name + "_M.csv")
+        self.filesize_str = tk.StringVar()
+        self.filesize_str.set(u"File size: ")
+        self.lbfs = tk.Label(self, textvariable=self.filesize_str)
+        self.lbfs.pack(anchor=tk.W, padx=_pad[0], pady=_pad[1])
 
-    pagen.raw2phys()
-    pagen.save_raw_csv(name + "_N.csv")
+        self.status_str = tk.StringVar()
+        self.status_str.set(u"Select file.")
+        self.lbst = tk.Label(self, textvariable=self.status_str)
+        self.lbst.pack(anchor=tk.W, padx=_pad[0], pady=_pad[1])
 
-    pageo.save_raw_csv(name + "_O.csv")
+    def fileopen(self):
+        """
+        File open dialog.
 
-    pagep.save_raw_csv(name + "_P.csv")
+        Returns
+        -------
+        None.
 
-    pages.raw2phys()
-    pages.save_raw_csv(name + "_S.csv")
+        """
+        fTyp = [("log file", "*.dat")]
+        filename = tk.filedialog.askopenfilename(filetypes=fTyp)
+        if len(filename) > 0:
+            self.bt.configure(state=tk.DISABLED)
+            self.status_str.set(u"File selected.")
+            th = threading.Thread(target=self.convert, args=(filename,))
+            th.start()
 
-    print('*** Estimated GNSS locking time ***')
-#    @todo: ubxデータから求める?
-    print('PageA: {0} s'.format(pagea.time_gps_lock()))
-    print('PageH: {0} s'.format(pageh.time_gps_lock()))
+    def func_handler_append(self, func, *args):
+        """
+        Page selector for appending converted data.
+
+        Parameters
+        ----------
+        func : TYPE
+            DESCRIPTION.
+        *args : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
+        return func.append(*args)
+
+    def func_handler_raw2phys(self, func):
+        """
+        Page selector for converting data with pysical units.
+
+        Parameters
+        ----------
+        func : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
+        return func.raw2phys()
+
+    def func_handler_save_raw_csv(self, func, *args):
+        """
+        Page selector for saving csv file.
+
+        Parameters
+        ----------
+        func : TYPE
+            DESCRIPTION.
+        *args : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
+        return func.save_raw_csv(*args)
+
+    def convert(self, filename):
+        """
+        Open and convert binary log file.
+
+        Parameters
+        ----------
+        filename : str
+            Log file to be converted.
+
+        Returns
+        -------
+        None.
+
+        """
+        with open(filename, 'rb') as fobj:
+            self.filename_str.set(u"File name: " + filename)
+            filesize = os.path.getsize(filename)
+            self.filesize_str.set("File size: {0:,} byte".format(filesize))
+            self.status_str.set(u"File opened.")
+            name, _ = os.path.splitext(filename)
+            readsize = 0
+            pb_previous = 0
+
+            page = SylphideProcessor.page()
+            page_list = ["a", "f", "h", "l", "m", "n", "o", "p", "s", "t", "v"]
+            for page_elem in page_list:
+                exec('page' + page_elem +
+                     ' = SylphideProcessor.page' + page_elem + '()')
+            pageg = SylphideProcessor.pageg()
+
+            self.status_str.set(u"Reading file.")
+            while True:
+                h_data = fobj.read(page.size)
+                if len(h_data) < page.size:
+                    break
+                readsize += page.size
+                pb_current = int(readsize / filesize * 100)
+                if pb_previous < pb_current:
+                    self.status_str.set(u"Reading file. {}% done."
+                                        .format(pb_current))
+                    pb_previous = pb_current
+                self.func_handler_append(eval("page" + chr(h_data[0]).lower()),
+                                         h_data)
+
+            self.status_str.set(u"Converting unit.")
+            for page_elem in page_list:
+                self.func_handler_raw2phys(eval("page" + page_elem))
+
+            self.status_str.set(u"Writing csv files.")
+            for page_elem in page_list:
+                self.func_handler_save_raw_csv(eval("page" + page_elem),
+                                               name + "_" +
+                                               page_elem.upper() + ".csv")
+            self.status_str.set(u"Writing ubx file.")
+            pageg.save_raw_ubx(name + "_G.ubx")
+
+            self.status_str.set(u"Done.")
+            self.bt.configure(state=tk.NORMAL)
+
+
+if __name__ == '__main__':
+    root = tk.Tk()
+    app = Application(master=root)
+    app.mainloop()
