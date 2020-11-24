@@ -717,17 +717,18 @@ class pagev(pagecsv):
     [3]: internal time
     [4-7]: gnss time
     [8-9]: lost packet, uint16（受信側で書き込み）
-    [10-11]: crcerror, uint16（受信側で書き込み）
-    [12-13]: reserved
+    [10-11]: crc error, uint16（受信側で書き込み）
+    [12-13]: LQI, uint16（無線モジュールで書き込み）
     [14-15]: offset, int16（送信側で書き込み）
     [16-17]: 目標値adc, uint16（送信側で書き込み）
     [18-19]: 現在位置のAD変換値, uint16（受信側で書き込み）
     [20-21]: モータ電圧, uint16（受信側で書き込み）
     [22-23]: モータ電流, uint16（受信側で書き込み）
     [24-25]: HPA_Navi電圧, uint16（受信側で書き込み）
-    [26-27]: reserved
-    [28-29]: reserved
-    [30-31]: reserved
+    [26]: プロペラピッチ遷移風速, 低速側, uint8（x 0.1 m/s）
+    [27]: プロペラピッチ遷移風速, 高速側, uint8（x 0.1 m/s）
+    [28-29]: 低速側プロペラピッチ, int16（x 0.001 deg.）
+    [30-31]: 高速側プロペラピッチ, int16（x 0.001 deg.）
     @todo OK
     """
 
