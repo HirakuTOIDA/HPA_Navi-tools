@@ -671,7 +671,8 @@ class paget(pagecsv):
         super().__init__()
         self.payload_format = '<1x1B'
         self.payload_format_format = '<1x1B1I8B'  # フォーマットモード
-        self.payload_format_dump = '<1B30B'  # ダンプモード
+        # self.payload_format_dump = '<1B30B'  # ダンプモード
+        self.payload_format_dump = '<30B'  # ダンプモード
         self.csv_header = ['Mode', 'Internal Time/dat',
                            'GNSS Time (s)/dat'] + ['dat'] * 28
 
@@ -693,7 +694,8 @@ class paget(pagecsv):
                                                  dat[18:])))
             return out
         elif py_data[0] == 68:  # 'D'
-            return list(struct.unpack(self.payload_format_dump, dat[1:]))
+            # print(["#"] + list(struct.unpack(self.payload_format_dump, dat[1:])))
+            return ["# 68"] + list(struct.unpack(self.payload_format_dump, dat[2:]))
 
     def append(self, dat):
         py_data = self.unpack(dat)
