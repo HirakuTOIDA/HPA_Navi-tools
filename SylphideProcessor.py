@@ -474,7 +474,7 @@ class pageol(pagecsv24):
     @memo とりあえずscalingsはpending
     @todo OK
     @memo format
-    [0]:     'O'
+    [0]:     'O' or 'L'
     [1]:     internal time
     [2-5]:   time
     [6-8]:   ch0
@@ -485,7 +485,7 @@ class pageol(pagecsv24):
     [21-23]: ch1
     [24-26]: ch2
     [27-29]: ch3
-    [30-31]: reserved
+    [30-31]: LQI
     """
 
     def __init__(self):
@@ -530,7 +530,7 @@ class pageo(pageol):
     [21-23]: ch1
     [24-26]: ch2
     [27-29]: ch3
-    [30-31]: reserved
+    [30-31]: LQI
     """
 
     def __init__(self):
@@ -555,7 +555,7 @@ class pagel(pageol):
     [21-23]: ch1
     [24-26]: ch2
     [27-29]: ch3
-    [30-31]: reserved
+    [30-31]: LQI
     """
 
     def __init__(self):
