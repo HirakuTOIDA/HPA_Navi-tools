@@ -492,7 +492,7 @@ class pageol(pagecsv24):
         super().__init__()
         self.payload_format = '<1x1B1I24B1H'
         self.csv_header = ['Internal Time', 'GNSS Time (s)',
-                           'Ch1', 'Ch2', 'Ch3', 'Ch4']
+                           'Ch1', 'Ch2', 'Ch3', 'Ch4', 'LQI']
 
     def unpack(self, dat):
         py_data = list(struct.unpack(self.payload_format, dat))
@@ -502,8 +502,8 @@ class pageol(pagecsv24):
             if(dat_conv[i] > 2 ** 23):
                 dat_conv[i] = -2 ** 24 + dat_conv[i]
         out = []
-        out.append([py_data[0], py_data[1] - 20] + list(dat_conv[:4]))
-        out.append([py_data[0], py_data[1]] + list(dat_conv[4:]))
+        out.append([py_data[0], py_data[1] - 20] + list(dat_conv[:4]) + [py_data[26]])
+        out.append([py_data[0], py_data[1]] + list(dat_conv[4:]) + [py_data[26]])
         return out
 
     def append(self, dat):
@@ -718,7 +718,7 @@ class pagev(pagecsv):
     [4-7]: gnss time
     [8-9]: lost packet, uint16（受信側で書き込み）
     [10-11]: crc error, uint16（受信側で書き込み）
-    [12-13]: LQI, uint16（無線モジュールで書き込み）
+    [12-13]: LQI (Link Quality Indicator), uint16（無線モジュールで書き込み）
     [14-15]: offset, int16（送信側で書き込み）
     [16-17]: 目標値adc, uint16（送信側で書き込み）
     [18-19]: 現在位置のAD変換値, uint16（受信側で書き込み）
@@ -737,7 +737,7 @@ class pagev(pagecsv):
         # self.payload_rx = [] # ファイルを送受信で分割する場合必要
         self.payload_format = '<1x1H1B1I3H1h8H'
         self.csv_header = ['TX or RX', 'Internal Time', 'GNSS Time (s)',
-                           'Lost packet', 'CRC error', 'reserved', 'Offset',
+                           'Lost packet', 'CRC error', 'LQI', 'Offset',
                            'ADC target', 'ADC read',
                            'Battery voltage (Motor)', 'Motor current',
                            'Battery voltage (Control)'] + ['reserved'] * 3
