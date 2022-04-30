@@ -24,7 +24,7 @@ class page():
     payload : list
         List of unpacked data.
 
-    @todo OK
+    @memo OK
     """
 
     size = 32
@@ -79,7 +79,7 @@ class pagecsv(page):
     filename_config : str
         Filename of configureation file.
 
-    @todo OK
+    @memo OK
     """
 
     def __init__(self):
@@ -180,7 +180,7 @@ class pagea(pagecsv24):
     Store and unpack A page data.
 
     - Analog
-    @todo OK
+    @memo OK
     """
 
     def __init__(self):
@@ -332,7 +332,7 @@ class pageh(pagecsv):
     Store and unpack H page data.
 
     - Human powered airplane
-    @todo OK
+    @memo OK
     """
 
     def __init__(self):
@@ -395,7 +395,8 @@ class pagem(pagecsv):
 
     def __init__(self):
         super().__init__()
-        self.payload_format = '<1x2x1B1I12h'
+        self.payload_format_LE = '<1x2x1B1I12h'
+        self.payload_format_BE = '>1x2x1B1I12h'
         self.csv_header = ['Internal Time', 'GNSS Time (s)',
                            'Mag X', 'Mag Y', 'Mag Z']
         config = configparser.ConfigParser()
@@ -419,14 +420,15 @@ class pagem(pagecsv):
             self.payload = py_data
 
     def unpack(self, dat):
-        py_data = list(struct.unpack(self.payload_format, dat))
+        py_data_LE = list(struct.unpack(self.payload_format_LE, dat))
+        py_data_BE = list(struct.unpack(self.payload_format_BE, dat))
         out = []
         for i in range(4):
-            out.append([py_data[0],
-                        py_data[1] - self.sampling_interval * (3 - i),
-                        py_data[3 + i * 3],
-                        py_data[2 + i * 3],
-                        -py_data[4 + i * 3]])
+            out.append([py_data_LE[0],
+                        py_data_LE[1] - self.sampling_interval * (3 - i),
+                        py_data_BE[2 + i * 3],
+                        py_data_BE[3 + i * 3],
+                        py_data_BE[4 + i * 3]])
         return out
 
     def append(self, dat):
@@ -674,7 +676,7 @@ class paget(pagecsv):
         # self.payload_format_dump = '<1B30B'  # ダンプモード
         self.payload_format_dump = '<30B'  # ダンプモード
         self.csv_header = ['Mode', 'Internal Time/dat',
-                           'GNSS Time (s)/dat'] + ['dat'] * 28
+                           'GNSS Time (s)/dat'] + ['dat'] * 8
 
     def raw2phys(self):
         if len(self.payload) > 1:

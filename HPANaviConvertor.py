@@ -1,9 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Data conversion script for HPA_Navi.
-
-
-"""
+"""Data conversion script for HPA_Navi."""
 import os
 import threading
 import tkinter as tk
@@ -17,8 +13,7 @@ class Application(tk.Frame):
 
     Attributes
     ----------
-    @todo
-
+    master
     """
 
     def __init__(self, master=None):
@@ -28,6 +23,10 @@ class Application(tk.Frame):
         self.master.title('HPA_Navi Convertor')
 
         _pad = [5, 5]
+
+        self.raw_val = tk.BooleanVar()
+        self.raw = tk.Checkbutton(self, text=u'Unit conversion', variable=self.raw_val)
+        self.raw.pack(padx=_pad[0], pady=_pad[1])
 
         self.bt = tk.Button(self, text=u'Open & Convert',
                             command=self.fileopen)
@@ -61,6 +60,7 @@ class Application(tk.Frame):
         filename = tk.filedialog.askopenfilename(filetypes=fTyp)
         if len(filename) > 0:
             self.bt.configure(state=tk.DISABLED)
+            self.raw.configure(state=tk.DISABLED)
             self.status_str.set(u"File selected.")
             th = threading.Thread(target=self.convert, args=(filename,))
             th.start()
@@ -163,10 +163,10 @@ class Application(tk.Frame):
                     pb_previous = pb_current
                 self.func_handler_append(eval("page" + chr(h_data[0]).lower()),
                                          h_data)
-
-            self.status_str.set(u"Converting unit.")
-            for page_elem in page_list:
-                self.func_handler_raw2phys(eval("page" + page_elem))
+            if self.raw_val.get() == True:
+                self.status_str.set(u"Converting unit.")
+                for page_elem in page_list:
+                    self.func_handler_raw2phys(eval("page" + page_elem))
 
             self.status_str.set(u"Writing csv files.")
             for page_elem in page_list:
@@ -178,7 +178,7 @@ class Application(tk.Frame):
 
             self.status_str.set(u"Done.")
             self.bt.configure(state=tk.NORMAL)
-
+            self.raw.configure(state=tk.NORMAL)
 
 if __name__ == '__main__':
     root = tk.Tk()
