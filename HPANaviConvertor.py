@@ -161,7 +161,8 @@ class Application(tk.Frame):
                     self.status_str.set(u"Reading file. {}% done."
                                         .format(pb_current))
                     pb_previous = pb_current
-                self.func_handler_append(eval("page" + chr(h_data[0]).lower()),
+                if chr(h_data[0]).lower() in page_list:
+                    self.func_handler_append(eval("page" + chr(h_data[0]).lower()),
                                          h_data)
             if self.raw_val.get() == True:
                 self.status_str.set(u"Converting unit.")
