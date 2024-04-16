@@ -144,7 +144,7 @@ class Application(tk.Frame):
             pb_previous = 0
 
             page = SylphideProcessor.page()
-            page_list = ["a", "f", "h", "l", "m", "n", "o", "p", "s", "t", "v"]
+            page_list = ["a", "b", "f", "h", "l", "m", "n", "o", "p", "r", "s", "t", "u", "v"]
             for page_elem in page_list:
                 exec('page' + page_elem +
                      ' = SylphideProcessor.page' + page_elem + '()')
@@ -161,7 +161,9 @@ class Application(tk.Frame):
                     self.status_str.set(u"Reading file. {}% done."
                                         .format(pb_current))
                     pb_previous = pb_current
-                if chr(h_data[0]).lower() in page_list:
+                page_list_ext = page_list.copy()
+                page_list_ext.append("g")
+                if chr(h_data[0]).lower() in page_list_ext:
                     self.func_handler_append(eval("page" + chr(h_data[0]).lower()),
                                          h_data)
             if self.raw_val.get() == True:
