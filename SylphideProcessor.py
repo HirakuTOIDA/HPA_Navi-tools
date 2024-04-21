@@ -1,20 +1,23 @@
-# -*- coding: utf-8 -*-
 """
 Sylphide Processor.
 
 Convert Sylphide format binary data into readable csv or ubx files.
 """
+
+# Imports
 import struct
 import configparser
 import numpy as np
 import pandas as pd
+from typing import Any, List
 
 # import scipy.interpolate
 
 # @todo tuple -> list
 
 
-class page:
+# Base class for handling pages of data
+class Page:
     """
     Store and unpack abstract page data.
 
@@ -28,36 +31,39 @@ class page:
     @memo OK
     """
 
-    size = 32
+    size: int = 32
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.payload_format = ""
-        self.payload = []
+        self.payload: List[Any] = []
 
-    def unpack(self, dat):
+    def unpack(self, dat: bytes) -> Any:
         """
         Unpack raw binary data.
 
         Parameters
         ----------
-        dat : TYPE
+        dat : bytes
             Input data to be unpacked.
 
         Returns
         -------
-        dat : TYPE
+        Any
             Output data unpacked.
+        @memo PageGがバイナリ列を出力するのでここはAny。
 
         """
-        return dat
 
-    def append(self, dat):
+        """Placeholder for unpack method to be overridden in derived classes."""
+        raise NotImplementedError("Subclasses must implement this method.")
+
+    def append(self, dat: bytes) -> None:
         """
         Append unpacked data to data list.
 
         Parameters
         ----------
-        dat : TYPE
+        dat : bytes
             Input data to be unpacked and stored.
 
         Returns
@@ -65,17 +71,17 @@ class page:
         None.
 
         """
-        py_data = self.unpack(dat)
-        self.payload.append(py_data)
+        unpacked_data = self.unpack(dat)
+        self.payload.append(unpacked_data)
 
 
-class pagecsv(page):
+class PageCsv(Page):
     """
     Store and unpack page data.
 
     Attributes
     ----------
-    csv_header : str
+    csv_header : List[str]
         Header added to output csv file.
     filename_config : str
         Filename of configureation file.
@@ -85,17 +91,17 @@ class pagecsv(page):
 
     def __init__(self):
         super().__init__()
-        self.csv_header = ""
-        self.filename_config = "config.ini"  # @todo ベタ書きでよい?
+        self.csv_header: List[str] = []
+        self.filename_config: str = "config.ini"  # @todo ベタ書きでよい?
 
-    def save_raw_csv(self, filename):
+    def save_raw_csv(self, filename: str) -> None:
         """
         Save stored data to csv file.
 
         Parameters
         ----------
-        filename : TYPE
-            DESCRIPTION.
+        filename : str
+            保存するファイルの名前。
 
         Returns
         -------
@@ -123,19 +129,32 @@ class pagecsv(page):
     # def interporation(self, time_gps, dat):
     #     return scipy.interpolate.interp1d(time_gps, dat)
 
-    def unpack(self, dat):
+    def unpack(self, dat: bytes) -> List[Any]:
+        """
+        バイナリデータを解凍します。
+
+        Parameters
+        ----------
+        dat : bytes
+            アンパックするデータ。
+
+        Returns
+        -------
+        List[Any]
+            アンパックされたデータリスト。
+        """
         return list(struct.unpack(self.payload_format, dat))
 
-    def millisec2sec(self, dat, column=1):
+    def millisec2sec(self, dat, column: int = 1) -> None:
         """
         Convert time from millisecond to second.
 
         Parameters
         ----------
-        dat : TYPE
-            DESCRIPTION.
-        column : TYPE, optional
-            DESCRIPTION. The default is 1.
+        dat : np.ndarray
+            変換するデータが含まれるNumPy配列。
+        column : int, optional
+            変換するデータの列番号。 The default is 1.
 
         Returns
         -------
@@ -144,14 +163,14 @@ class pagecsv(page):
         """
         dat[:, column] /= 1.0e3
 
-    def raw2phys(self):
+    def raw2phys(self) -> None:
         if len(self.payload) > 1:
-            py_data = np.array(self.payload, dtype=np.float64)
-            self.millisec2sec(py_data)
-            self.payload = py_data
+            unpacked_data = np.array(self.payload, dtype=np.float64)
+            self.millisec2sec(unpacked_data)
+            self.payload = unpacked_data.tolist()
 
 
-class pagecsv24(pagecsv):
+class PageCsv24(PageCsv):
     """
     Store and unpack page data with 24 bit format.
 
@@ -159,33 +178,33 @@ class pagecsv24(pagecsv):
     @todo uintとintを実装
     """
 
-    def convert24bit(self, dat):
+    def convert24bit(self, dat: List[int]) -> int:
         """
         Convert 24 bit data to unsigned int.
 
         Parameters
         ----------
-        dat : TYPE
-            DESCRIPTION.
+        dat : List[int]
+            24ビットデータを含むバイト列。
 
         Returns
         -------
-        TYPE
-            DESCRIPTION.
+        int
+            変換された符号なし整数。
 
         """
         return dat[2] + dat[1] * 2**8 + dat[0] * 2**16
 
 
-class pagebol(pagecsv24):
+class PageBOL(PageCsv24):
     """
-    Store and unpack O or L page data.
+    Store and unpack B or O or L page data.
 
     - Output power
     @memo とりあえずscalingsはpending
     @todo OK
     @memo format
-    [0]:     'O' or 'L'
+    [0]:     'B' or 'O' or 'L'
     [1]:     internal time
     [2-5]:   time
     [6-8]:   ch0
@@ -212,25 +231,35 @@ class pagebol(pagecsv24):
             "LQI",
         ]
 
-    def unpack(self, dat):
-        py_data = list(struct.unpack(self.payload_format, dat))
-        dat_conv = np.zeros([8])
+    def unpack(self, dat: bytes) -> List[List[Any]]:
+        unpacked_data = list(struct.unpack(self.payload_format, dat))
+        dat_conv = np.zeros(8)
         for i in range(8):
-            dat_conv[i] = self.convert24bit(py_data[2 + 3 * i : 5 + 3 * i])
+            start_index = 2 + 3 * i
+            end_index = 5 + 3 * i
+            dat_conv[i] = self.convert24bit(unpacked_data[start_index:end_index])
             if dat_conv[i] > 2**23:
                 dat_conv[i] = -(2**24) + dat_conv[i]
-        out = []
-        out.append([py_data[0], py_data[1] - 20] + list(dat_conv[:4]) + [py_data[26]])
-        out.append([py_data[0], py_data[1]] + list(dat_conv[4:]) + [py_data[26]])
+        out: List[List[Any]] = []
+        out.append(
+            [unpacked_data[0], unpacked_data[1] - 20]
+            + list(dat_conv[:4])
+            + [unpacked_data[26]]
+        )
+        out.append(
+            [unpacked_data[0], unpacked_data[1]]
+            + list(dat_conv[4:])
+            + [unpacked_data[26]]
+        )
         return out
 
-    def append(self, dat):
-        py_data = self.unpack(dat)
+    def append(self, dat: bytes) -> None:
+        unpacked_data = self.unpack(dat)
         for i in range(2):
-            self.payload.append(py_data[i])
+            self.payload.append(unpacked_data[i])
 
 
-class pagea(pagecsv24):
+class PageA(PageCsv24):
     """
     Store and unpack A page data.
 
@@ -240,8 +269,8 @@ class pagea(pagecsv24):
 
     def __init__(self):
         super().__init__()
-        self.payload_format = "<1x1B1I24B1H"
-        self.csv_header = [
+        self.payload_format: str = "<1x1B1I24B1H"
+        self.csv_header: List[str] = [
             "Internal Time",
             "GNSS Time (s)",
             "Acc X (g)",
@@ -257,53 +286,63 @@ class pagea(pagecsv24):
         config = configparser.ConfigParser()
         config.read(self.filename_config)
         configA = config["A"]
-        self.scaling_acc = []
-        self.scaling_acc.append(float(configA["scaling_acc_x"]))
-        self.scaling_acc.append(float(configA["scaling_acc_y"]))
-        self.scaling_acc.append(float(configA["scaling_acc_z"]))
-        self.offset_acc = []
-        self.offset_acc.append(float(configA["offset_acc_x"]))
-        self.offset_acc.append(float(configA["offset_acc_y"]))
-        self.offset_acc.append(float(configA["offset_acc_z"]))
-        self.scaling_gyr = []
-        self.scaling_gyr.append(float(configA["scaling_gyr_x"]))
-        self.scaling_gyr.append(float(configA["scaling_gyr_y"]))
-        self.scaling_gyr.append(float(configA["scaling_gyr_z"]))
-        self.offset_gyr = []
-        self.offset_gyr.append(float(configA["offset_gyr_x"]))
-        self.offset_gyr.append(float(configA["offset_gyr_y"]))
-        self.offset_gyr.append(float(configA["offset_gyr_z"]))
-        self.scaling_prs = float(configA["scaling_prs"])
-        self.scaling_tmp_prs = float(configA["scaling_tmp_prs"])
-        self.offset_tmp_prs = float(configA["offset_tmp_prs"])
-        self.scaling_tmp_imu = float(configA["scaling_tmp_imu"])
-        self.offset_tmp_imu = float(configA["offset_tmp_imu"])
+        self.scaling_acc: List[float] = [
+            float(configA["scaling_acc_x"]),
+            float(configA["scaling_acc_y"]),
+            float(configA["scaling_acc_z"]),
+        ]
+        self.offset_acc: List[float] = [
+            float(configA["offset_acc_x"]),
+            float(configA["offset_acc_y"]),
+            float(configA["offset_acc_z"]),
+        ]
+        self.scaling_gyr: List[float] = [
+            float(configA["scaling_gyr_x"]),
+            float(configA["scaling_gyr_y"]),
+            float(configA["scaling_gyr_z"]),
+        ]
+        self.offset_gyr: List[float] = [
+            float(configA["offset_gyr_x"]),
+            float(configA["offset_gyr_y"]),
+            float(configA["offset_gyr_z"]),
+        ]
+        self.scaling_prs: float = float(configA["scaling_prs"])
+        self.scaling_tmp_prs: float = float(configA["scaling_tmp_prs"])
+        self.offset_tmp_prs: float = float(configA["offset_tmp_prs"])
+        self.scaling_tmp_imu: float = float(configA["scaling_tmp_imu"])
+        self.offset_tmp_imu: float = float(configA["offset_tmp_imu"])
 
-    def raw2phys(self):
+    def raw2phys(self) -> None:
         if len(self.payload) > 1:
-            py_data = np.array(self.payload, dtype=np.float64)
-            self.millisec2sec(py_data)
+            unpacked_data = np.array(self.payload, dtype=np.float64)
+            self.millisec2sec(unpacked_data)
             for i in range(3):
-                py_data[:, 2 + i] = (
-                    py_data[:, 2 + i] - self.offset_acc[i]
+                unpacked_data[:, 2 + i] = (
+                    unpacked_data[:, 2 + i] - self.offset_acc[i]
                 ) / self.scaling_acc[i]
-                py_data[:, 5 + i] = (
-                    py_data[:, 5 + i] - self.offset_gyr[i]
+                unpacked_data[:, 5 + i] = (
+                    unpacked_data[:, 5 + i] - self.offset_gyr[i]
                 ) / self.scaling_gyr[i]
-            py_data[:, 8] = py_data[:, 8] * self.scaling_prs
-            py_data[:, 9] = py_data[:, 9] * self.scaling_tmp_prs - self.offset_tmp_prs
-            py_data[:, 10] = py_data[:, 10] * self.scaling_tmp_imu - self.offset_tmp_imu
-            self.payload = py_data
+            unpacked_data[:, 8] = unpacked_data[:, 8] * self.scaling_prs
+            unpacked_data[:, 9] = (
+                unpacked_data[:, 9] * self.scaling_tmp_prs - self.offset_tmp_prs
+            )
+            unpacked_data[:, 10] = (
+                unpacked_data[:, 10] * self.scaling_tmp_imu - self.offset_tmp_imu
+            )
+            self.payload = unpacked_data.tolist()
 
-    def unpack(self, dat):
-        py_data = list(struct.unpack(self.payload_format, dat))
-        dat_conv = np.zeros([8])
+    def unpack(self, dat) -> List[Any]:
+        unpacked_data = list(struct.unpack(self.payload_format, dat))
+        dat_conv = np.zeros(8)
         for i in range(8):
-            dat_conv[i] = self.convert24bit(py_data[2 + 3 * i : 5 + 3 * i])
-        return [py_data[0], py_data[1]] + list(dat_conv) + [py_data[26]]
+            dat_conv[i] = self.convert24bit(unpacked_data[2 + 3 * i : 5 + 3 * i])
+        return (
+            [unpacked_data[0], unpacked_data[1]] + list(dat_conv) + [unpacked_data[26]]
+        )
 
 
-class pageb(pagebol):
+class PageB(PageBOL):
     """
     Store and unpack B page data.
 
@@ -329,7 +368,7 @@ class pageb(pagebol):
         super().__init__()
 
 
-class pagec:
+class PageC:
     """
     コマンド用として定義済み
     """
@@ -337,7 +376,7 @@ class pagec:
     pass
 
 
-class pagef(pagecsv):
+class PageF(PageCsv):
     """
     Store and unpack F page data.
 
@@ -348,8 +387,8 @@ class pagef(pagecsv):
 
     def __init__(self):
         super().__init__()
-        self.payload_format = "1x2x1B1I24B"
-        self.csv_header = [
+        self.payload_format: str = "1x2x1B1I24B"
+        self.csv_header: List[str] = [
             "Internal Time",
             "GNSS Time (s)",
             "In0 (us)",
@@ -370,33 +409,36 @@ class pagef(pagecsv):
             "Out7 (us)",
         ]
 
-    def convert2x12bit(self, dat):
+    def convert2x12bit(self, dat: bytes) -> List[int]:
         """
         Convert 3 bytes data to two 12 bit data.
 
         Parameters
         ----------
-        dat : TYPE
+        dat : bytes
             input data.
 
         Returns
         -------
-        list
+        List[int, int]
             converted data.
 
         """
-        return [(dat[1] & 0xF0) * 2**4 + dat[0], (dat[1] & 0x0F) * 2**8 + dat[2]]
+        return [(dat[1] & 0xF0) >> 4 | (dat[0] << 4), (dat[1] & 0x0F) << 8 | dat[2]]
 
-    def unpack(self, dat):
-        py_data = list(struct.unpack(self.payload_format, dat))
-        dat_conv = np.zeros([16])
+    def unpack(self, dat: bytes) -> List[int]:
+        unpacked_data = list(struct.unpack(self.payload_format, dat))
+        dat_conv = np.zeros(16)
         for i in range(8):
-            dat_conv[i * 2] = self.convert2x12bit(py_data[2 + 3 * i : 5 + 3 * i])[0]
-            dat_conv[i * 2 + 1] = self.convert2x12bit(py_data[2 + 3 * i : 5 + 3 * i])[1]
-        return [py_data[0], py_data[1]] + list(dat_conv)
+            start_index = 2 + 3 * i
+            end_index = 5 + 3 * i
+            dat_conv[i * 2], dat_conv[i * 2 + 1] = self.convert2x12bit(
+                unpacked_data[start_index:end_index]
+            )
+        return [unpacked_data[0], unpacked_data[1]] + list(dat_conv)
 
 
-class pageg(page):
+class PageG(Page):
     """
     Store and unpack G page data.
 
@@ -408,14 +450,14 @@ class pageg(page):
     def __init__(self):
         super().__init__()
 
-    def save_raw_ubx(self, filename):
+    def save_raw_ubx(self, filename: str) -> None:
         """
         Save raw ubx binary file.
 
         Parameters
         ----------
-        filename : TYPE
-            DESCRIPTION.
+        filename : str
+            保存するファイルの名前。
 
         Returns
         -------
@@ -427,11 +469,24 @@ class pageg(page):
                 for dat in self.payload:
                     f.write(dat)
 
-    def unpack(self, dat):
+    def unpack(self, dat: bytes) -> bytes:
+        """
+        データをアンパックします。この場合、データの先頭1バイトを除いて返します。
+
+        Parameters
+        ----------
+        dat : bytes
+            アンパックするデータ。
+
+        Returns
+        -------
+        bytes
+            アンパックされたデータ。
+        """
         return dat[1:]
 
 
-class pageh(pagecsv):
+class PageH(PageCsv):
     """
     Store and unpack H page data.
 
@@ -441,8 +496,8 @@ class pageh(pagecsv):
 
     def __init__(self):
         super().__init__()
-        self.payload_format = "<1x2x1B1I12H"
-        self.csv_header = [
+        self.payload_format: str = "<1x2x1B1I12H"
+        self.csv_header: List[str] = [
             "Internal Time",
             "GNSS Time (s)",
             "Cadence (rpm)",
@@ -461,47 +516,54 @@ class pageh(pagecsv):
         config = configparser.ConfigParser()
         config.read(self.filename_config)
         configH = config["H"]
-        self.scaling_cadence = []
-        self.scaling_cadence.append(float(configH["scaling_cadence0"]))
-        self.scaling_cadence.append(float(configH["scaling_cadence1"]))
-        self.scaling_ias = float(configH["scaling_ias"])
-        self.offset_ias = float(configH["offset_ias"])
-        self.scaling_alt = float(configH["scaling_alt"])
-        self.scaling_adc = []
-        self.scaling_adc.append(float(configH["scaling_adc0"]))
-        self.scaling_adc.append(float(configH["scaling_adc1"]))
-        self.scaling_adc.append(float(configH["scaling_adc2"]))
-        self.scaling_adc.append(float(configH["scaling_adc3"]))
-        self.scaling_adc.append(float(configH["scaling_adc4"]))
-        self.scaling_adc.append(float(configH["scaling_adc5"]))
-        self.scaling_adc.append(float(configH["scaling_adc6"]))
-        self.scaling_adc.append(float(configH["scaling_adc7"]))
-        self.offset_adc = []
-        self.offset_adc.append(float(configH["offset_adc0"]))
-        self.offset_adc.append(float(configH["offset_adc1"]))
-        self.offset_adc.append(float(configH["offset_adc2"]))
-        self.offset_adc.append(float(configH["offset_adc3"]))
-        self.offset_adc.append(float(configH["offset_adc4"]))
-        self.offset_adc.append(float(configH["offset_adc5"]))
-        self.offset_adc.append(float(configH["offset_adc6"]))
-        self.offset_adc.append(float(configH["offset_adc7"]))
+        self.scaling_cadence: List[float] = [
+            float(configH["scaling_cadence0"]),
+            float(configH["scaling_cadence1"]),
+        ]
+        self.scaling_ias: float = float(configH["scaling_ias"])
+        self.offset_ias: float = float(configH["offset_ias"])
+        self.scaling_alt: float = float(configH["scaling_alt"])
+        self.scaling_adc: List[float] = [
+            float(configH["scaling_adc0"]),
+            float(configH["scaling_adc1"]),
+            float(configH["scaling_adc2"]),
+            float(configH["scaling_adc3"]),
+            float(configH["scaling_adc4"]),
+            float(configH["scaling_adc5"]),
+            float(configH["scaling_adc6"]),
+            float(configH["scaling_adc7"]),
+        ]
+        self.offset_adc: List[float] = [
+            float(configH["offset_adc0"]),
+            float(configH["offset_adc1"]),
+            float(configH["offset_adc2"]),
+            float(configH["offset_adc3"]),
+            float(configH["offset_adc4"]),
+            float(configH["offset_adc5"]),
+            float(configH["offset_adc6"]),
+            float(configH["offset_adc7"]),
+        ]
 
-    def raw2phys(self):
+    def raw2phys(self) -> None:
         if len(self.payload) > 1:
-            py_data = np.array(self.payload, dtype=np.float64)
-            self.millisec2sec(py_data)
+            unpacked_data = np.array(self.payload, dtype=np.float64)
+            self.millisec2sec(unpacked_data)
             for i in range(2):
-                py_data[:, 2 + i] = self.scaling_cadence[i] / py_data[:, 2 + i]
-            py_data[:, 4] = py_data[:, 4] * self.scaling_ias + self.offset_ias
-            py_data[:, 5] = py_data[:, 5] * self.scaling_alt
-            for i in range(8):
-                py_data[:, 6 + i] = (
-                    py_data[:, 6 + i] * self.scaling_adc[i] - self.offset_adc[i]
+                unpacked_data[:, 2 + i] = (
+                    self.scaling_cadence[i] / unpacked_data[:, 2 + i]
                 )
-            self.payload = py_data
+            unpacked_data[:, 4] = (
+                unpacked_data[:, 4] * self.scaling_ias + self.offset_ias
+            )
+            unpacked_data[:, 5] = unpacked_data[:, 5] * self.scaling_alt
+            for i in range(8):
+                unpacked_data[:, 6 + i] = (
+                    unpacked_data[:, 6 + i] * self.scaling_adc[i] - self.offset_adc[i]
+                )
+            self.payload = unpacked_data.tolist()
 
 
-class pagel(pagebol):
+class PageL(PageBOL):
     """
     Store and unpack L page data.
 
@@ -527,7 +589,7 @@ class pagel(pagebol):
         super().__init__()
 
 
-class pagem(pagecsv):
+class PageM(PageCsv):
     """
     Store and unpack M page data.
 
@@ -537,21 +599,27 @@ class pagem(pagecsv):
 
     def __init__(self):
         super().__init__()
-        self.payload_format_LE = "<1x2x1B1I12h"
-        self.payload_format_BE = ">1x2x1B1I12h"
-        self.csv_header = ["Internal Time", "GNSS Time (s)", "Mag X", "Mag Y", "Mag Z"]
+        self.payload_format_LE: str = "<1x2x1B1I12h"
+        self.payload_format_BE: str = ">1x2x1B1I12h"
+        self.csv_header: List[str] = [
+            "Internal Time",
+            "GNSS Time (s)",
+            "Mag X",
+            "Mag Y",
+            "Mag Z",
+        ]
         config = configparser.ConfigParser()
         config.read(self.filename_config)
         configM = config["M"]
-        self.sampling_interval = float(configM["sampling_interval"])
-        self.scaling = np.array(
+        self.sampling_interval: float = float(configM["sampling_interval"])
+        self.scaling: np.ndarray = np.array(
             [
                 float(configM["scaling_x"]),
                 float(configM["scaling_y"]),
                 float(configM["scaling_z"]),
             ]
         )
-        self.offset = np.array(
+        self.offset: np.ndarray = np.array(
             [
                 float(configM["offset_x"]),
                 float(configM["offset_y"]),
@@ -559,37 +627,56 @@ class pagem(pagecsv):
             ]
         )
 
-    def raw2phys(self):
+    def raw2phys(self) -> None:
+        """
+        ペイロードデータを物理単位に変換します。
+        """
         if len(self.payload) > 1:
-            py_data = np.array(self.payload, dtype=np.float64)
-            self.millisec2sec(py_data)
+            unpacked_data: np.ndarray = np.array(self.payload, dtype=np.float64)
+            self.millisec2sec(unpacked_data)
             for i in range(3):
-                py_data[:, 2 + i] = py_data[:, 2 + i] * self.scaling[i] - self.offset[i]
-            self.payload = py_data
+                unpacked_data[:, 2 + i] = (
+                    unpacked_data[:, 2 + i] * self.scaling[i] - self.offset[i]
+                )
+            self.payload = unpacked_data.tolist()
 
-    def unpack(self, dat):
-        py_data_LE = list(struct.unpack(self.payload_format_LE, dat))
-        py_data_BE = list(struct.unpack(self.payload_format_BE, dat))
-        out = []
+    def unpack(self, dat: bytes) -> List[List[float]]:
+        """
+        バイナリデータを解析し、リスト形式でマグネトメータデータを返します。
+
+        Parameters
+        ----------
+        dat : bytes
+            解析するバイナリデータ。
+
+        Returns
+        -------
+        List[List[float]]
+            解析後のデータリスト。
+        """
+        unpacked_data_LE = list(struct.unpack(self.payload_format_LE, dat))
+        unpacked_data_BE = list(struct.unpack(self.payload_format_BE, dat))
+        out: List[List[float]] = []
         for i in range(4):
             out.append(
                 [
-                    py_data_LE[0],
-                    py_data_LE[1] - self.sampling_interval * (3 - i),
-                    py_data_BE[2 + i * 3],
-                    py_data_BE[3 + i * 3],
-                    py_data_BE[4 + i * 3],
+                    unpacked_data_LE[0],
+                    unpacked_data_LE[1] - self.sampling_interval * (3 - i),
+                    *unpacked_data_BE[2 + i * 3 : 5 + i * 3],
                 ]
             )
         return out
 
     def append(self, dat):
-        py_data = self.unpack(dat)
+        """
+        アンパックされたデータをペイロードに追加します。
+        """
+        unpacked_data = self.unpack(dat)
         for i in range(4):
-            self.payload.append(py_data[i])
+            self.payload.append(unpacked_data[i])
 
 
-class pagen(pagecsv):
+class PageN(PageCsv):
     """
     Store and unpack N page data.
 
@@ -599,8 +686,8 @@ class pagen(pagecsv):
 
     def __init__(self):
         super().__init__()
-        self.payload_format = "<1x1B2x4i6h"
-        self.csv_header = [
+        self.payload_format: str = "<1x1B2x4i6h"
+        self.csv_header: List[str] = [
             "Data Number",
             "GNSS Time (s)",
             "Longitude (deg.)",
@@ -614,20 +701,20 @@ class pagen(pagecsv):
             "Pitch (deg.)",
         ]
 
-    def raw2phys(self):
+    def raw2phys(self) -> None:
         if len(self.payload) > 1:
-            py_data = np.array(self.payload, dtype=np.float64)
-            self.millisec2sec(py_data)
-            py_data[:, 2] /= 1.0e7
-            py_data[:, 3] /= 1.0e7
-            py_data[:, 4] /= 1.0e4
+            unpacked_data = np.array(self.payload, dtype=np.float64)
+            self.millisec2sec(unpacked_data)
+            unpacked_data[:, 2] /= 1.0e7  # Longitude
+            unpacked_data[:, 3] /= 1.0e7  # Latitude
+            unpacked_data[:, 4] /= 1.0e4  # Altitude
 
-            for i in np.arange(5, 11):
-                py_data[:, i] /= 1.0e2
-            self.payload = py_data
+            for i in np.arange(5, 11):  # Velocity and orientation
+                unpacked_data[:, i] /= 1.0e2
+            self.payload = unpacked_data.tolist()
 
 
-class pageo(pagebol):
+class PageO(PageBOL):
     """
     Store and unpack O page data.
 
@@ -653,7 +740,7 @@ class pageo(pagebol):
         super().__init__()
 
 
-class pagep(pagecsv):
+class PageP(PageCsv):
     """
     Store and unpack P page data.
 
@@ -682,8 +769,8 @@ class pagep(pagecsv):
 
     def __init__(self):
         super().__init__()
-        self.payload_format = ["<1x2x1B1I", ">6I"]
-        self.csv_header = [
+        self.payload_format: List[str] = ["<1x2x1B1I", ">6I"]
+        self.csv_header: List[str] = [
             "Internal Time",
             "GNSS Time (s)",
             "Pressure (Pa)",
@@ -692,42 +779,50 @@ class pagep(pagecsv):
         config = configparser.ConfigParser()
         config.read(self.filename_config)
         configP = config["P"]
-        self.sampling_interval = float(configP["sampling_interval"])
-        self.scaling_tmp = float(configP["scaling_tmp"])
+        self.sampling_interval: float = float(configP["sampling_interval"])
+        self.scaling_tmp: float = float(configP["scaling_tmp"])
 
-    def unpack(self, dat):
-        py_data_1 = list(struct.unpack(self.payload_format[0], dat[:8]))
-        py_data_2 = list(struct.unpack(self.payload_format[1], dat[8:]))
-        out = []
+    def unpack(self, dat: bytes) -> List[List[Any]]:
+        unpacked_data_1 = list(struct.unpack(self.payload_format[0], dat[:8]))
+        unpacked_data_2 = list(struct.unpack(self.payload_format[1], dat[8:]))
+        out: List[List[Any]] = []
         for i in range(3):
             out.append(
                 [
-                    py_data_1[0],
-                    py_data_1[1] - self.sampling_interval * (2 - i),
-                    py_data_2[0 + i * 2],
-                    py_data_2[1 + i * 2],
+                    unpacked_data_1[0],
+                    unpacked_data_1[1] - self.sampling_interval * (2 - i),
+                    unpacked_data_2[0 + i * 2],
+                    unpacked_data_2[1 + i * 2],
                 ]
             )
         return out
 
-    def append(self, dat):
-        py_data = self.unpack(dat)
+    def append(self, dat: bytes) -> None:
+        unpacked_data = self.unpack(dat)
         for i in range(3):
-            self.payload.append(py_data[i])
+            self.payload.append(unpacked_data[i])
 
-    def raw2phys(self):
+    def raw2phys(self) -> None:
         if len(self.payload) > 1:
-            py_data = np.array(self.payload, dtype=np.float64)
-            self.millisec2sec(py_data)
-            py_data[:, 3] *= self.scaling_tmp
-            self.payload = py_data
+            unpacked_data = np.array(self.payload, dtype=np.float64)
+            self.millisec2sec(unpacked_data)
+            unpacked_data[:, 3] *= self.scaling_tmp
+            self.payload = unpacked_data.tolist()
 
 
-class pager(pagecsv):
+class PageR(PageCsv):
     """
     Store and unpack R page data.
 
     - RSC series
+
+    Attributes:
+        payload_format (str): データパケットのフォーマットを指定する文字列。
+        csv_header (List[str]): CSVファイルのヘッダーリスト。
+        sampling_interval (float): サンプリング間隔。
+        scaling_prs (float): 圧力データのスケーリング係数。
+        scaling_tmp (float): 温度データのスケーリング係数。
+
     @todo OK
     @memo
     ...
@@ -751,8 +846,8 @@ class pager(pagecsv):
 
     def __init__(self):
         super().__init__()
-        self.payload_format = ["<1x2x1B1I", "<12h"]
-        self.csv_header = [
+        self.payload_format: str = ["<1x2x1B1I", "<12h"]
+        self.csv_header: List[str] = [
             "Internal Time",
             "GNSS Time (s)",
             "Pressure 1 (inH2O)",
@@ -765,55 +860,62 @@ class pager(pagecsv):
         config = configparser.ConfigParser()
         config.read(self.filename_config)
         configR = config["R"]
-        self.sampling_interval = float(configR["sampling_interval"])
-        self.scaling_prs = float(configR["scaling_prs"])
-        self.scaling_tmp = float(configR["scaling_tmp"])
+        self.sampling_interval: float = float(configR["sampling_interval"])
+        self.scaling_prs: float = float(configR["scaling_prs"])
+        self.scaling_tmp: float = float(configR["scaling_tmp"])
 
-    def unpack(self, dat):
-        py_data_1 = list(struct.unpack(self.payload_format[0], dat[:8]))
-        py_data_2 = list(struct.unpack(self.payload_format[1], dat[8:]))
-        out = []
+    def unpack(self, dat: bytes) -> List[List[Any]]:
+        unpacked_data_1 = list(struct.unpack(self.payload_format[0], dat[:8]))
+        unpacked_data_2 = list(struct.unpack(self.payload_format[1], dat[8:]))
+        out: List[List[Any]] = []
         for i in range(2):
             out.append(
                 [
-                    py_data_1[0],
-                    py_data_1[1] - self.sampling_interval * (2 - i),
-                    py_data_2[0 + i * 6],
-                    py_data_2[1 + i * 6],
-                    py_data_2[2 + i * 6],
-                    py_data_2[3 + i * 6],
-                    py_data_2[4 + i * 6],
-                    py_data_2[5 + i * 6],
+                    unpacked_data_1[0],
+                    unpacked_data_1[1] - self.sampling_interval * (2 - i),
+                    *unpacked_data_2[0 + i * 6 : 6 + i * 6],
                 ]
             )
         return out
 
-    def append(self, dat):
-        py_data = self.unpack(dat)
+    def append(self, dat: bytes) -> None:
+        """
+        アンパックしたデータをペイロードに追加します。
+        """
+        unpacked_data = self.unpack(dat)
         for i in range(2):
-            self.payload.append(py_data[i])
+            self.payload.append(unpacked_data[i])
 
-    def raw2phys(self):
+    def raw2phys(self) -> None:
+        """
+        ペイロードデータを物理単位に変換します。
+        """
         if len(self.payload) > 1:
-            py_data = np.array(self.payload, dtype=np.float64)
-            self.millisec2sec(py_data)
-            py_data[:, 2:5] *= self.scaling_prs
-            py_data[:, 5:] *= self.scaling_tmp
-            self.payload = py_data
+            unpacked_data = np.array(self.payload, dtype=np.float64)
+            self.millisec2sec(unpacked_data)
+            unpacked_data[:, 2:5] *= self.scaling_prs
+            unpacked_data[:, 5:] *= self.scaling_tmp
+            self.payload = unpacked_data.tolist()
 
 
-class pages(pagecsv):
+class PageS(PageCsv):
     """
     Store and unpack S page data.
 
     - System supervisor
+
+    Attributes:
+        payload_format (str): Format string for struct unpacking.
+        csv_header (List[str]): Headers for the CSV output.
+        scaling factors (float): Scaling factors for voltage and current measurements.
+
     @todo OK
     """
 
     def __init__(self):
         super().__init__()
-        self.payload_format = "<1x2x1B1I12h"
-        self.csv_header = [
+        self.payload_format: str = "<1x2x1B1I12h"
+        self.csv_header: List[str] = [
             "Internal Time",
             "GNSS Time (s)",
             "3.3V (V)",
@@ -825,43 +927,55 @@ class pages(pagecsv):
         config = configparser.ConfigParser()
         config.read(self.filename_config)
         configS = config["S"]
-        self.scaling_3V3_Vol = float(configS["scaling_3V3_Vol"])
-        self.scaling_Pow_Vol = float(configS["scaling_Pow_Vol"])
-        self.scaling_5V0_Vol = float(configS["scaling_5V0_Vol"])
-        self.scaling_Bat_Cur = float(configS["scaling_Bat_Cur"])
-        self.scaling_USB_Cur = float(configS["scaling_USB_Cur"])
+        self.scaling_3V3_Vol: float = float(configS["scaling_3V3_Vol"])
+        self.scaling_Pow_Vol: float = float(configS["scaling_Pow_Vol"])
+        self.scaling_5V0_Vol: float = float(configS["scaling_5V0_Vol"])
+        self.scaling_Bat_Cur: float = float(configS["scaling_Bat_Cur"])
+        self.scaling_USB_Cur: float = float(configS["scaling_USB_Cur"])
 
-    def raw2phys(self):
+    def raw2phys(self) -> None:
         if len(self.payload) > 1:
-            py_data = np.array(self.payload, dtype=np.float64)
-            self.millisec2sec(py_data)
-            py_data[:, 2] *= self.scaling_3V3_Vol
-            py_data[:, 3] *= self.scaling_Pow_Vol
-            py_data[:, 4] *= self.scaling_5V0_Vol
-            py_data[:, 5] *= self.scaling_Bat_Cur
-            py_data[:, 6] *= self.scaling_USB_Cur
-            self.payload = py_data
+            unpacked_data = np.array(self.payload, dtype=np.float64)
+            self.millisec2sec(unpacked_data)
+            unpacked_data[:, 2] *= self.scaling_3V3_Vol
+            unpacked_data[:, 3] *= self.scaling_Pow_Vol
+            unpacked_data[:, 4] *= self.scaling_5V0_Vol
+            unpacked_data[:, 5] *= self.scaling_Bat_Cur
+            unpacked_data[:, 6] *= self.scaling_USB_Cur
+            self.payload = unpacked_data.tolist()
 
 
-class paget(pagecsv):
+class PageT(PageCsv):
     """
     Store and unpack T page data.
 
     - ANT+
+
+    Attributes:
+        payload_format (str): Basic unpack format string.
+        payload_format_format (str): Unpack format string for formatted data.
+        payload_format_dump (str): Unpack format string for dump mode.
+        csv_header (List[str]): Headers for the CSV output.
+
     @todo OK
     """
 
     def __init__(self):
         super().__init__()
-        self.payload_format = "<1x1B"
-        self.payload_format_format = "<1x1B1I8B"  # フォーマットモード
-        # self.payload_format_dump = '<1B30B'  # ダンプモード
-        self.payload_format_dump = "<30B"  # ダンプモード
-        self.csv_header = ["Mode", "Internal Time/dat", "GNSS Time (s)/dat"] + [
-            "dat"
-        ] * 8
+        self.payload_format: str = "<1x1B"
+        self.payload_format_format: str = "<1x1B1I8B"  # フォーマットモード
+        # self.payload_format_dump:str = '<1B30B'  # ダンプモード
+        self.payload_format_dump: str = "<30B"  # ダンプモード
+        self.csv_header: List[str] = [
+            "Mode",
+            "Internal Time/dat",
+            "GNSS Time (s)/dat",
+        ] + ["dat"] * 8
 
-    def raw2phys(self):
+    def raw2phys(self) -> None:
+        """
+        Convert the raw data in the payload to physical units.
+        """
         if len(self.payload) > 1:
             for i, pl in enumerate(self.payload):
                 if len(pl) == 11:
@@ -869,33 +983,48 @@ class paget(pagecsv):
                     pl[2] *= 1.0e-3
                     self.payload[i] = pl
 
-    def unpack(self, dat):
-        py_data = list(struct.unpack(self.payload_format, dat[:2]))
-        if py_data[0] == 70:  # 'F'
+    def unpack(self, dat: bytes):
+        unpacked_data = list(struct.unpack(self.payload_format, dat[:2]))
+        if unpacked_data[0] == 70:  # 'F'
             out = []
             out.append(
                 [70] + list(struct.unpack(self.payload_format_format, dat[2:16]))
             )
             out.append([70] + list(struct.unpack(self.payload_format_format, dat[18:])))
             return out
-        elif py_data[0] == 68:  # 'D'
+        elif unpacked_data[0] == 68:  # 'D'
             # print(["#"] + list(struct.unpack(self.payload_format_dump, dat[1:])))
             return ["# 68"] + list(struct.unpack(self.payload_format_dump, dat[2:]))
+        return None
 
-    def append(self, dat):
-        py_data = self.unpack(dat)
-        if py_data != None:
-            if len(py_data) == 2:
+    def append(self, dat: bytes) -> None:
+        """
+        Append unpacked data to the payload if it's valid.
+
+        Args:
+            dat (bytes): The data to be unpacked and possibly appended.
+        """
+        unpacked_data = self.unpack(dat)
+        if unpacked_data != None:
+            if len(unpacked_data) == 2:
                 for i in range(2):
-                    self.payload.append(py_data[i])
+                    self.payload.append(unpacked_data[i])
             else:
-                self.payload.append(py_data)
+                self.payload.append(unpacked_data)
 
-class pageu(pagecsv):
+
+class PageU(PageCsv):
     """
     Store and unpack U page data.
 
     - Brake by wire
+
+    Attributes:
+        payload_format (str): データアンパック用のフォーマット文字列。
+        csv_header (List[str]): CSV出力用のヘッダー。
+        scaling_* (float): 各種センサーのスケーリング係数。
+        offset_* (float): 電圧計算のためのオフセット値。
+
     Format
     [0]: "U"
     [1-2]: Reserved
@@ -916,10 +1045,11 @@ class pageu(pagecsv):
     [30]: Voltage 2, V_CAN, 0 -  4.096 V, 3.3 V nominal, V_CAN =  1.0 * ADCout [mV], (ADCout - 3300) / 1 count, int8_t, 3172 - 3428 mV,  1 mV step
     [31]: Voltage 3, V_SYS, 0 -  4.096 V, 3.3 V nominal, V_SYS =  1.0 * ADCout [mV], (ADCout - 3300) / 1 count, int8_t, 3172 - 3428 mV,  1 mV step
     """
+
     def __init__(self):
         super().__init__()
-        self.payload_format = "<1x2x1B1I10H4b"
-        self.csv_header = [
+        self.payload_format: str = "<1x2x1B1I10H4b"
+        self.csv_header: List[str] = [
             "Internal Time",
             "GNSS Time (s)",
             "Sensor input 0",
@@ -940,31 +1070,66 @@ class pageu(pagecsv):
         config = configparser.ConfigParser()
         config.read(self.filename_config)
         configU = config["U"]
-        self.scaling_sensor_current_0 = float(configU["scaling_sensor_current_0"])
-        self.scaling_sensor_current_1 = float(configU["scaling_sensor_current_1"])
-        self.scaling_sensor_current_2 = float(configU["scaling_sensor_current_2"])
-        self.scaling_servo_current_0 = float(configU["scaling_servo_current_0"])
-        self.scaling_servo_current_1 = float(configU["scaling_servo_current_1"])
-        self.scaling_voltage_0 = float(configU["scaling_voltage_0"])
-        self.scaling_voltage_1 = float(configU["scaling_voltage_1"])
-        self.scaling_voltage_2 = float(configU["scaling_voltage_2"])
-        self.scaling_voltage_3 = float(configU["scaling_voltage_3"])
-        self.offset_voltage_0 = float(configU["offset_voltage_0"])
-        self.offset_voltage_1 = float(configU["offset_voltage_1"])
-        self.offset_voltage_2 = float(configU["offset_voltage_2"])
-        self.offset_voltage_3 = float(configU["offset_voltage_3"])
+        self.scaling_sensor_current_0: float = float(
+            configU["scaling_sensor_current_0"]
+        )
+        self.scaling_sensor_current_1: float = float(
+            configU["scaling_sensor_current_1"]
+        )
+        self.scaling_sensor_current_2: float = float(
+            configU["scaling_sensor_current_2"]
+        )
+        self.scaling_servo_current_0: float = float(configU["scaling_servo_current_0"])
+        self.scaling_servo_current_1: float = float(configU["scaling_servo_current_1"])
+        self.scaling_voltage_0: float = float(configU["scaling_voltage_0"])
+        self.scaling_voltage_1: float = float(configU["scaling_voltage_1"])
+        self.scaling_voltage_2: float = float(configU["scaling_voltage_2"])
+        self.scaling_voltage_3: float = float(configU["scaling_voltage_3"])
+        self.offset_voltage_0: float = float(configU["offset_voltage_0"])
+        self.offset_voltage_1: float = float(configU["offset_voltage_1"])
+        self.offset_voltage_2: float = float(configU["offset_voltage_2"])
+        self.offset_voltage_3: float = float(configU["offset_voltage_3"])
 
     def raw2phys(self):
+        """
+        ペイロードデータを物理単位に変換します。
+        """
         if len(self.payload) > 1:
-            py_data = np.array(self.payload, dtype=np.float64)
-            self.millisec2sec(py_data, 2)
-            self.payload = py_data
+            unpacked_data = np.array(self.payload, dtype=np.float64)
+            self.millisec2sec(unpacked_data, 2)
+            unpacked_data[:, 2] *= self.scaling_sensor_current_0
+            unpacked_data[:, 3] *= self.scaling_sensor_current_1
+            unpacked_data[:, 4] *= self.scaling_sensor_current_2
+            unpacked_data[:, 5] *= self.scaling_servo_current_0
+            unpacked_data[:, 6] *= self.scaling_servo_current_1
+            unpacked_data[:, 12] = (
+                unpacked_data[:, 12] - self.offset_voltage_0
+            ) * self.scaling_voltage_0
+            unpacked_data[:, 13] = (
+                unpacked_data[:, 13] - self.offset_voltage_1
+            ) * self.scaling_voltage_1
+            unpacked_data[:, 14] = (
+                unpacked_data[:, 14] - self.offset_voltage_2
+            ) * self.scaling_voltage_2
+            unpacked_data[:, 15] = (
+                unpacked_data[:, 15] - self.offset_voltage_3
+            ) * self.scaling_voltage_3
+            self.payload = unpacked_data.tolist()
 
-class pagev(pagecsv):
+
+class PageV(PageCsv):
     """
     Store and unpack V page data.
 
     - Variable pitch propeller
+
+    Attributes:
+        payload_format (str): ペイロードのフォーマット指定。
+        csv_header (List[str]): CSVヘッダー。
+        scaling_bat_motor (float): モータ用バッテリのスケーリング係数。
+        scaling_cur (float): 電流のスケーリング係数。
+        scaling_bat_control (float): 制御用バッテリのスケーリング係数。
+
     Format
     [0]: "V"
     [1-2]: "TX" or "RX"
@@ -989,8 +1154,8 @@ class pagev(pagecsv):
     def __init__(self):
         super().__init__()
         # self.payload_rx = [] # ファイルを送受信で分割する場合必要
-        self.payload_format = "<1x1H1B1I3H1h8H"
-        self.csv_header = [
+        self.payload_format: str = "<1x1H1B1I3H1h8H"
+        self.csv_header: List[str] = [
             "TX or RX",
             "Internal Time",
             "GNSS Time (s)",
@@ -1007,40 +1172,43 @@ class pagev(pagecsv):
         config = configparser.ConfigParser()
         config.read(self.filename_config)
         configV = config["V"]
-        self.scaling_bat_motor = float(configV["scaling_bat_motor"])
-        self.scaling_cur = float(configV["scaling_cur"])
-        self.scaling_bat_control = float(configV["scaling_bat_control"])
+        self.scaling_bat_motor: float = float(configV["scaling_bat_motor"])
+        self.scaling_cur: float = float(configV["scaling_cur"])
+        self.scaling_bat_control: float = float(configV["scaling_bat_control"])
 
-    def raw2phys(self):
+    def raw2phys(self) -> None:
+        """
+        ペイロードデータを物理単位に変換します。
+        """
         if len(self.payload) > 1:
-            py_data = np.array(self.payload, dtype=np.float64)
-            self.millisec2sec(py_data, 2)
-            py_data[:, 9] *= self.scaling_bat_motor
-            py_data[:, 10] *= self.scaling_cur
-            py_data[:, 11] *= self.scaling_bat_control
-            self.payload = py_data
+            unpacked_data = np.array(self.payload, dtype=np.float64)
+            self.millisec2sec(unpacked_data, 2)
+            unpacked_data[:, 9] *= self.scaling_bat_motor
+            unpacked_data[:, 10] *= self.scaling_cur
+            unpacked_data[:, 11] *= self.scaling_bat_control
+            self.payload = unpacked_data.tolist()
 
     # ファイルを送受信で分割するコード
     """
     def raw2phys(self):
         if len(self.payload) > 0:
-            py_data = np.array(self.payload, dtype=np.float64)
-            self.millisec2sec(py_data)
-            self.payload = py_data
+            unpacked_data = np.array(self.payload, dtype=np.float64)
+            self.millisec2sec(unpacked_data)
+            self.payload = unpacked_data
         if len(self.payload_rx) > 0:
-            py_data = np.array(self.payload_rx, dtype=np.float64)
-            self.millisec2sec(py_data)
-            self.payload_rx = py_data
+            unpacked_data = np.array(self.payload_rx, dtype=np.float64)
+            self.millisec2sec(unpacked_data)
+            self.payload_rx = unpacked_data
     def append(self, dat):
-        py_data = self.unpack(dat)
-        if py_data[0] == 22612:
-            self.payload.append(py_data)
+        unpacked_data = self.unpack(dat)
+        if unpacked_data[0] == 22612:
+            self.payload.append(unpacked_data)
             # print("tx")
-        elif py_data[0] == 22610:
-            self.payload_rx.append(py_data)
+        elif unpacked_data[0] == 22610:
+            self.payload_rx.append(unpacked_data)
             # print("rx")
         # else:
-            # print(py_data[0])
+            # print(unpacked_data[0])
     def save_raw_csv(self, filename):
         if len(self.payload) > 0:
             np.savetxt(filename+"_TX", np.array(self.payload), fmt='%.7f',
@@ -1051,7 +1219,7 @@ class pagev(pagecsv):
     """
 
 
-class pagew(pagecsv):
+class PageW(PageCsv):
     """
     Page W
     - HeartRateMonitor
@@ -1065,8 +1233,8 @@ class pagew(pagecsv):
         self.csv_header = 'Internal Time, GNSS Time (s), '
     def raw2phys(self):
         if len(self.payload) > 0:
-            py_data = np.array(self.payload, dtype=np.float64)
-            self.millisec2sec(py_data)
-            self.payload = py_data
+            unpacked_data = np.array(self.payload, dtype=np.float64)
+            self.millisec2sec(unpacked_data)
+            self.payload = unpacked_data
     """
     pass
