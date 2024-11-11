@@ -127,8 +127,17 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# 
 data/
 *.old
 CUI/
 test/
+
 HPANaviConvertor.bat
+
+# Nuitka
+*.build
+*.dist
+*.onefile-build
+*.exe
