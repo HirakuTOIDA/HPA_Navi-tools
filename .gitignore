@@ -141,3 +141,5 @@ HPANaviConvertor.bat
 *.dist
 *.onefile-build
 *.exe
+*.bat
+
