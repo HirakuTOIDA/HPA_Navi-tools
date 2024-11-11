@@ -165,7 +165,7 @@ class Application(tk.Frame):
                 page_list_ext.append("G")
                 page_upper = chr(h_data[0]).upper()
                 if page_upper in page_list_ext:
-                    print(page_upper)
+                    # print(page_upper)
                     self.func_handler_append(eval("Page" + page_upper),
                                          h_data)
             if self.raw_val.get() == True:

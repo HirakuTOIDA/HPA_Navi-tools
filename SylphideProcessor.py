@@ -11,10 +11,6 @@ import numpy as np
 import pandas as pd
 from typing import Any, List
 
-# import scipy.interpolate
-
-# @todo tuple -> list
-
 
 # Base class for handling pages of data
 class Page:
@@ -27,11 +23,7 @@ class Page:
         Description of format used in unpack.
     payload : list
         List of unpacked data.
-
-    @memo OK
     """
-
-    size: int = 32
 
     def __init__(self) -> None:
         self.payload_format = ""
@@ -50,8 +42,7 @@ class Page:
         -------
         Any
             Output data unpacked.
-        @memo PageGがバイナリ列を出力するのでここはAny。
-
+            @memo PageGがバイナリ列を出力するのでここはAny。
         """
 
         """Placeholder for unpack method to be overridden in derived classes."""
@@ -69,10 +60,13 @@ class Page:
         Returns
         -------
         None.
-
         """
         unpacked_data = self.unpack(dat)
         self.payload.append(unpacked_data)
+
+    @property
+    def size(self) -> int:
+        return 32
 
 
 class PageCsv(Page):
@@ -85,14 +79,12 @@ class PageCsv(Page):
         Header added to output csv file.
     filename_config : str
         Filename of configureation file.
-
-    @memo OK
     """
 
-    def __init__(self):
+    def __init__(self, filename_config="config.ini"):
         super().__init__()
         self.csv_header: List[str] = []
-        self.filename_config: str = "config.ini"  # @todo ベタ書きでよい?
+        self.filename_config: str = filename_config
 
     def save_raw_csv(self, filename: str) -> None:
         """
@@ -108,26 +100,14 @@ class PageCsv(Page):
         None.
 
         """
-        if len(self.payload) > 1:
+        # @todo 1を含めない理由は?
+        if len(self.payload) > 0:
             df = pd.DataFrame(self.payload)
             header = self.csv_header
-            header[0] = "# " + header[0]
-            df.columns = header
+            if len(self.csv_header) > 0:
+                header[0] = "# " + header[0]
+                df.columns = header
             df.to_csv(filename, index=False)
-
-    # @todo check
-    # def time_gps_lock(self):
-    #     dat = np.array(self.payload)
-    #     time_gps = dat[:,1]
-    #     time_gps_diff = np.diff(time_gps)
-    #     time_int = dat[:,0]
-    #     time_int_diff = np.remainder(np.diff(time_int),2**8)
-    #     time_int_gps_diff = time_gps_diff - time_int_diff
-    #     time_gps_lock_index = np.where(time_int_gps_diff == np.max(time_int_gps_diff))
-    #     return time_gps[time_gps_lock_index[0] + 1]
-    # @todo check
-    # def interporation(self, time_gps, dat):
-    #     return scipy.interpolate.interp1d(time_gps, dat)
 
     def unpack(self, dat: bytes) -> List[Any]:
         """
@@ -164,7 +144,8 @@ class PageCsv(Page):
         dat[:, column] /= 1.0e3
 
     def raw2phys(self) -> None:
-        if len(self.payload) > 1:
+        # @todo 1を含めない理由は?
+        if len(self.payload) > 0:
             unpacked_data = np.array(self.payload, dtype=np.float64)
             self.millisec2sec(unpacked_data)
             self.payload = unpacked_data.tolist()
@@ -464,7 +445,7 @@ class PageG(Page):
         None.
 
         """
-        if len(self.payload) > 1:
+        if len(self.payload) > 0:
             with open(filename, mode="wb") as f:
                 for dat in self.payload:
                     f.write(dat)
@@ -690,8 +671,8 @@ class PageN(PageCsv):
         self.csv_header: List[str] = [
             "Data Number",
             "GNSS Time (s)",
-            "Longitude (deg.)",
             "Latitude (deg.)",
+            "Longitude (deg.)",
             "Altitude (m)",
             "Velocity N (m/s)",
             "Velocity E (m/s)",
@@ -914,7 +895,7 @@ class PageS(PageCsv):
 
     def __init__(self):
         super().__init__()
-        self.payload_format: str = "<1x2x1B1I12h"
+        self.payload_format: str = "<1x2x1B1I12H"
         self.csv_header: List[str] = [
             "Internal Time",
             "GNSS Time (s)",
@@ -1015,7 +996,7 @@ class PageT(PageCsv):
 
 class PageU(PageCsv):
     """
-    Store and unpack U page data.
+    Store and unpack U page data. "U" stands for "mu", friction coefficient.
 
     - Brake by wire
 
@@ -1031,15 +1012,15 @@ class PageU(PageCsv):
     [3]: internal time, uint8_t
     [4-7]: gnss time, uint32_t
     [8-9]: Sensor input 0, Brake I/F input?, uint16_t
-    [10-11]: Sensor input 1, Wheel?, uint16_t
-    [12-13]: Sensor input 2, Unused, uint16_t
+    [10-11]: Sensor input 1, Unused, uint16_t
+    [12-13]: Sensor input 2, Wheel, uint16_t
     [14-15]: Servo output 0, uint16_t
     [16-17]: Servo output 1, uint16_t
-    [18-19]: Sensor current 0, uint16_t
-    [20-21]: Sensor current 1, uint16_t
-    [22-23]: Sensor current 2, uint16_t
-    [24-25]: Servo current 0, uint16_t
-    [26-27]: Servo current 1, uint16_t
+    [18-19]: Sensor current 0, int16_t
+    [20-21]: Sensor current 1, int16_t
+    [22-23]: Sensor current 2, int16_t
+    [24-25]: Servo current 0, int16_t
+    [26-27]: Servo current 1, int16_t
     [28]: Voltage 0, V_BUS, 0 - 20.480 V, 5.0 V nominal, V_BUS =  5.0 * ADCout [mV], (ADCout - 1000) / 1 count, int8_t, 4360 - 5640 mV,  5 mV step
     [29]: Voltage 1, V_BAT, 0 - 10.240 V, 7.4 V nominal, V_BAT =  2.5 * ADCout [mV], (ADCout - 2880) / 4 count, int8_t, 5920 - 8480 mV, 10 mV step
     [30]: Voltage 2, V_CAN, 0 -  4.096 V, 3.3 V nominal, V_CAN =  1.0 * ADCout [mV], (ADCout - 3300) / 1 count, int8_t, 3172 - 3428 mV,  1 mV step
@@ -1048,7 +1029,7 @@ class PageU(PageCsv):
 
     def __init__(self):
         super().__init__()
-        self.payload_format: str = "<1x2x1B1I10H4b"
+        self.payload_format: str = "<1x2x1B1I5H5h4b"
         self.csv_header: List[str] = [
             "Internal Time",
             "GNSS Time (s)",
@@ -1226,15 +1207,4 @@ class PageW(PageCsv):
     @memo 今後使う予定なしなので実装しない。
     """
 
-    """
-    def __init__(self):
-        super().__init__()
-        self.payload_format = '<1x2x1B1I24B'
-        self.csv_header = 'Internal Time, GNSS Time (s), '
-    def raw2phys(self):
-        if len(self.payload) > 0:
-            unpacked_data = np.array(self.payload, dtype=np.float64)
-            self.millisec2sec(unpacked_data)
-            self.payload = unpacked_data
-    """
     pass
