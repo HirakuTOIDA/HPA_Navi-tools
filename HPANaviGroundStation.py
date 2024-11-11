@@ -10,12 +10,12 @@ from pyqtgraph.Qt import QtCore
 import serial
 import serial.tools.list_ports
 
-import numpy as np
-
 import sys
 
-sys.path.append("../HPA_Navi_tools")
 import SylphideProcessor
+
+# pyqtgraphが使用しているQtバインディングを確認
+print(f"{pg.Qt.QT_LIB} is used.")
 
 # Automated serial port search
 print("***** Automated serial port(s) search *****")
@@ -357,6 +357,9 @@ curve_u = [
 # curves
 curve_list = [curve_a, curve_h, curve_m, curve_s, curve_u]
 curve = dict(zip(page_list, curve_list))
+
+# reset buffer
+ser.reset_input_buffer()
 
 # Set timers
 timer_plot = {key: QtCore.QTimer() for key in page_list}
