@@ -42,18 +42,18 @@ jobs:
           enable-plugins: pyside6
           
       # Uploads artifact
-      - name: Upload Artifact
+      - name: Upload Convertor Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: exe
+          name: HPANaviConvertor
           path: build/HPANaviConvertor.exe
           include-hidden-files: true
 
       # Uploads artifact
-      - name: Upload Artifact
+      - name: Upload GroundStation Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: exe
+          name: HPANaviGroundStation
           path: build/HPANaviGroundStation.exe
           include-hidden-files: true
           
