@@ -28,13 +28,13 @@ jobs:
           mode: onefile
           enable-plugins: tk-inter
 
-      - name: Qt GUI with PySide6
-        uses: Nuitka/Nuitka-Action@main
-        with:
-          nuitka-version: main
-          script-name: HPANaviGroundStation.py
-          mode: onefile
-          enable-plugins: pyside6
+      #- name: Qt GUI with PySide6
+      #  uses: Nuitka/Nuitka-Action@main
+      #  with:
+      #    nuitka-version: main
+      #    script-name: HPANaviGroundStation.py
+      #    mode: onefile
+      #    enable-plugins: pyside6
           
       # Uploads artifact
       - name: Upload Artifact
@@ -45,10 +45,10 @@ jobs:
           include-hidden-files: true
 
       # Uploads artifact
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: exe
-          path: build/HPANaviGroundStation.exe
-          include-hidden-files: true
+      #- name: Upload Artifact
+      #  uses: actions/upload-artifact@v4
+      #  with:
+      #    name: exe
+      #    path: build/HPANaviGroundStation.exe
+      #    include-hidden-files: true
           
