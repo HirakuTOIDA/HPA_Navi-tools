@@ -64,6 +64,7 @@ jobs:
           pip install numpy
           pip install pandas
           pip install pyqtgraph
+          pip install pyserial
         
       - name: Qt GUI with PySide6
         uses: Nuitka/Nuitka-Action@main
