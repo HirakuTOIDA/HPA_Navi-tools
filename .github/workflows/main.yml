@@ -1,4 +1,4 @@
-name: HPANaviConvertor
+name: Build
 
 on:
   push:
@@ -58,14 +58,7 @@ jobs:
       #     name: HPANaviGroundStation
       #     path: build/HPANaviGroundStation.exe
       #     include-hidden-files: true
-          
-name: HPANaviGroundStation
-
-on:
-  push:
-    branches: ["main"]
-  workflow_dispatch:
-    
+      
 jobs:
   build:
     # Windows is currently the only platform this action supports
