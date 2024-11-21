@@ -25,6 +25,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install PySide6
           pip install numpy
+          pip install pandas
         
       - name: Python GUI With TkInter
         uses: Nuitka/Nuitka-Action@main
