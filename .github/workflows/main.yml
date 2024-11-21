@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     
 jobs:
-  build:
+  build_HPANaviConvertor:
     # Windows is currently the only platform this action supports
     runs-on: windows-latest
 
@@ -59,8 +59,7 @@ jobs:
       #     path: build/HPANaviGroundStation.exe
       #     include-hidden-files: true
       
-jobs:
-  build:
+  build_HPANaviGroundStation:
     # Windows is currently the only platform this action supports
     runs-on: windows-latest
 
