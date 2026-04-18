@@ -145,10 +145,11 @@ class Application(tk.Frame):
 
             page = SylphideProcessor.Page()
             page_list = ["A", "B", "F", "H", "L", "M", "N", "O", "P", "R", "S", "T", "U", "V"]
-            for page_elem in page_list:
-                exec('Page' + page_elem +
-                     ' = SylphideProcessor.Page' + page_elem + '()')
-            PageG = SylphideProcessor.PageG()
+            pages = {
+                page_elem: getattr(SylphideProcessor, f"Page{page_elem}")()
+                for page_elem in page_list
+            }
+            pages["G"] = SylphideProcessor.PageG()
 
             self.status_str.set(u"Reading file.")
             while True:
@@ -161,25 +162,24 @@ class Application(tk.Frame):
                     self.status_str.set(u"Reading file. {}% done."
                                         .format(pb_current))
                     pb_previous = pb_current
-                page_list_ext = page_list.copy()
-                page_list_ext.append("G")
                 page_upper = chr(h_data[0]).upper()
-                if page_upper in page_list_ext:
-                    # print(page_upper)
-                    self.func_handler_append(eval("Page" + page_upper),
-                                         h_data)
+                if page_upper in pages:
+                    self.func_handler_append(pages[page_upper], h_data)
+
             if self.raw_val.get() == True:
                 self.status_str.set(u"Converting unit.")
                 for page_elem in page_list:
-                    self.func_handler_raw2phys(eval("Page" + page_elem))
+                    self.func_handler_raw2phys(pages[page_elem])
 
             self.status_str.set(u"Writing csv files.")
             for page_elem in page_list:
-                self.func_handler_save_raw_csv(eval("Page" + page_elem),
-                                               name + "_" +
-                                               page_elem.upper() + ".csv")
+                self.func_handler_save_raw_csv(
+                    pages[page_elem],
+                    name + "_" + page_elem.upper() + ".csv"
+                )
+
             self.status_str.set(u"Writing ubx file.")
-            PageG.save_raw_ubx(name + "_G.ubx")
+            pages["G"].save_raw_ubx(name + "_G.ubx")
 
             self.status_str.set(u"Done.")
             self.bt.configure(state=tk.NORMAL)
